@@ -1,0 +1,1 @@
+ttgo  --dns_name TTGO  -DCORE_DEBUG_LEVEL=4 -DRADIOLIB_GODMODE
