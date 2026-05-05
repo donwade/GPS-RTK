@@ -19,7 +19,9 @@ https://github.com/mikalhart/TinyGPSPlus
 #include <SPI.h>
 #include <Wire.h>  
 #include "SSD1306.h" 
+#include "SX127x_Tx.h"
 
+/*
 #define SCK     5    // GPIO5  -- SX1278's SCK
 #define MISO    19   // GPIO19 -- SX1278's MISO
 #define MOSI    27   // GPIO27 -- SX1278's MOSI
@@ -27,6 +29,7 @@ https://github.com/mikalhart/TinyGPSPlus
 #define RST     14   // GPIO14 -- SX1278's RESET
 #define DI0     26   // GPIO26 -- SX1278's IRQ(Interrupt Request)
 #define BAND    433E6
+*/
 
 SSD1306 display(0x3c, 21, 22);
 
@@ -149,7 +152,7 @@ double hist_lat[NUM_SAMPLES];
 double hist_lng[NUM_SAMPLES];
 
 
-void runGPS(void *not_used)
+void taskGPS(void *not_used)
 {
 	static uint32_t last_tick;
 	static bool bInited = false;
@@ -253,9 +256,14 @@ void runGPS(void *not_used)
 
 //---------------------------------------------------------
 
-void do_nothing(void *not_used)
+void taskRadio(void *not_used)
 {
-	while(1) delay(1000);
+	while(1)
+	{
+		loop_radio();
+		esp_task_wdt_reset();
+		delay(1);
+	}
 }
 
 //---------------------------------------------------------
@@ -297,6 +305,8 @@ void setup()
 	axp.setPowerOutPut(AXP192_EXTEN, AXP202_ON);
 	axp.setPowerOutPut(AXP192_DCDC1, AXP202_ON);
 	GPS.begin(9600, SERIAL_8N1, 34, 12);   //17-TX 18-RX
+
+	setup_radio();
 	
 	display.init();
 	display.flipScreenVertically();  
@@ -308,10 +318,10 @@ void setup()
 	display.display();
 	
 
-	TaskHandle_t t1, t2;
+	TaskHandle_t hRunRadio, hRunGPS;
 
-	xTaskCreate(do_nothing, "do_nothing", 4096, NULL, 8, &t1);
-	xTaskCreate(runGPS, "runGPS", 4096, NULL, 8, &t2);
+	xTaskCreate(taskRadio, "taskRadio", 4096* 4, NULL, 8, &hRunRadio);
+	xTaskCreate(taskGPS, "taskGPS", 4096 * 4, NULL, 8, &hRunGPS);
 	
 	// Define configuration
 	esp_task_wdt_config_t wdt_config =
@@ -322,7 +332,8 @@ void setup()
 	};
 
 	esp_task_wdt_reconfigure(&wdt_config); 
-  	esp_task_wdt_add(t2); // Add task t2 to WDT 
+  	esp_task_wdt_add(hRunRadio); 	// Add task hRunGPS to WDT 
+  	esp_task_wdt_add(hRunGPS); 		// Add task hRunGPS to WDT 
   	
 }
 
