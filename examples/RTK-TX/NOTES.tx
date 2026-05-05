@@ -1,0 +1,29 @@
+https://stackoverflow.com/questions/57827119/lora-sx1276-transmission-power-managment
+
+
+    what i said about RFO was right, but i still don’t know why they said it’s between -4 to 14 dBm and in the same datasheet in other section they said it’s 15 dBm. anyway, about how to set this in the register because you have 2 variable you need to set (maxPower, and outoutPower), you can notice we have 2 regions, from -4 to 0 dbm and from 0 to 15 dBm. for [-4, 0[ set the maxPower to 0 and that will give you a Pmax = 10.8 and from this equation Pout = Pmax - 15 + outputPower = 10.8 -15 + outputPower = -4.2 + outputPower, we can find outputPower = Pout + 4.2, and for the region [0, 15] we set the maxPower to 7 (the max value) so we will have this now , Pout = 15 - 15 + outputPower = outputPower.
+    About the PA_BOOST it a forward calculation nothing fancy, outputPower = Pout - 2 and don’t forget Pout should be between 2 and 17.
+    To switch betwen RFO and PA_BOOST, set the bit 7 in PaConfig register. and disable the +20 dBm option in the Pa_Dac register.
+
+    About the +20 dBm option, it's the same as PA_BOOST but instead of Pmax = 17, Pmax = 20 so outputPower = Pout - 5 , and you need to enable the PA_BOOST and then set the PA_Dac to 0x87, 7 to enable the +20 dBm option, , note : just by setting the outputPower to 0xf (15) you will get the 20dBm, and to disable this feature just set PaDac varaible to 4 ( set the PaDac register to 0x84) to disable it.
+
+    for the OCP, they have a table that gives you how to calculate the ocp value from the Imax,
+
+    ocp-trim [0-15], Imax [45, 120 mA] , Imax = 45 + 5 * ocpTrim
+
+    ocp-trim [16-27], Imax [130, 240 mA] , Imax = -30 + 10 * ocpTrim
+
+    ocp-trim > 27, Imax = 240mA , Imax = 240 mA
+
+    and about the Imax which is the current need for the Tx we can find this in the datasheet:
+
+    RFOP = 13 dBm uses 28mA
+
+    RFOP = 7 dBm uses 20 mA
+
+    PA_BOOST = 17 dBm uses 90 mA
+
+    +20 dBm opton uses 120mA
+
+    the OCP need to be enabled if you want to use the PA_BOOS. about the order of the settings. i will just try to set the register in order, just in case.
+

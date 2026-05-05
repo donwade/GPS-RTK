@@ -249,7 +249,7 @@ void taskGPS(void *not_used)
 
 		display.display();
 		smartDelay(1000);
-		esp_task_wdt_reset();
+		//esp_task_wdt_reset();
 				
 	}
 }
@@ -258,11 +258,11 @@ void taskGPS(void *not_used)
 
 void taskRadio(void *not_used)
 {
+	setup_radio();
+
 	while(1)
 	{
 		loop_radio();
-		esp_task_wdt_reset();
-		delay(1);
 	}
 }
 
@@ -274,9 +274,11 @@ static void smartDelay(unsigned long ms)
   do
   {
     while (GPS.available())
+      esp_task_wdt_reset();      // don't dog in a delay routine duh.
       gps.encode(GPS.read());
   } while (millis() - start < ms);
 }
+
 
 //---------------------------------------------------------
 
@@ -306,7 +308,6 @@ void setup()
 	axp.setPowerOutPut(AXP192_DCDC1, AXP202_ON);
 	GPS.begin(9600, SERIAL_8N1, 34, 12);   //17-TX 18-RX
 
-	setup_radio();
 	
 	display.init();
 	display.flipScreenVertically();  

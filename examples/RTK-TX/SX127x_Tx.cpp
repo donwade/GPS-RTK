@@ -22,6 +22,19 @@
 // include the library
 #include <RadioLib.h>
 
+#include <esp_task_wdt.h>
+
+void dogDelay(unsigned long ms)
+{
+  unsigned long start = millis();
+  do
+  {
+      esp_task_wdt_reset();      // don't dog in a delay routine duh.
+      delay(10);
+  } while (millis() - start < ms);
+}
+
+
 // SX1278 has the following connections:
 // NSS pin:   10
 // DIO0 pin:  2
@@ -67,7 +80,7 @@ void setFlag(void) {
   transmittedFlag = true;
 }
 
-#define FREQ 433.4000
+#define FREQ 434.0000
 
 void setup_radio() {
 
@@ -79,7 +92,7 @@ void setup_radio() {
   					  		    4.8,			//br
   					  			5.0,			//freqDev =  
   					  		    125.0, 			//rxBw = 
-  					  			-4,				//rxBw =  
+  					  			1,				//txpwr =  
   					  			16,				//preambleLength =  
   					  			false);			//enableOOK = 
  					  
@@ -96,7 +109,8 @@ void setup_radio() {
   // set the function that will be called
   // when packet transmission is finished
   radio.setPacketSentAction(setFlag);
-  //radio.setOutputPower(-4);
+  
+  radio.setOutputPower(2, false);
   //radio.setFrequency(FREQ);
   //radio.set
   
@@ -143,8 +157,8 @@ void loop_radio() {
     // RF switch is powered down etc.
     radio.finishTransmit();
 
-    // wait a 5 second before transmitting again
-    delay(5000);
+    // wait a 30 second before transmitting again
+    dogDelay(30000);
 
     // send another one
     Serial.print(F("[SX1278] Sending another packet ... "));
