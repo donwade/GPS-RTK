@@ -117,7 +117,6 @@ void loop(){while(1) delay(-1);};  // keep arduino happy
 //---------------------------------------------------------
 void led_display1(void)
 {
-	display.clear();
 	xprintf(0, "LA=%+9.7f", fast_lat);
 	xprintf(1, "LO=%+9.7f", fast_lng); 
 
@@ -140,9 +139,8 @@ void led_display1(void)
 	//xprintf(3, "%02d/%02d/%02d", gps.date.day(), gps.date.month(), gps.date.year());
 
 	
-	display.display();
+	//display.display();
 	
-	esp_task_wdt_reset();
 }
 //---------------------------------------------------------
 
@@ -158,71 +156,98 @@ void runGPS(void *not_used)
 	
 	while(1)
 	{
+	
+		display.clear();
 		fast_lat = gps.location.lat();
 		fast_lng = gps.location.lng();
 
-		if (!bInited && fast_lat)
+		if (!fast_lat && !fast_lng)
 		{
-			for (int j=0; j < NUM_SAMPLES; j++)
+			static uint32_t tick = 0;
+			uint16_t num_satellites = gps.satellites.value();
+			uint16_t quality = gps.hdop.value();
+			display.clear();
+
+			xprintf(0, "LA=%+9.7f", fast_lat);
+			xprintf(1, "LN=%+9.7f", fast_lng);
+			
+			xprintf(2, "SA=%02d Q=%d\n", num_satellites, min((uint16_t) 999, quality));
+			xprintf(3, "t=%d\n", tick++);
+					
+			printf("%8d SA=%d QUAL=%d\n", tick, num_satellites, quality);
+			
+		}
+		else
+		{
+		
+			if (!bInited && fast_lat)
 			{
-				hist_lat[j] = fast_lat;
-				hist_lng[j] = fast_lng;
+				for (int j=0; j < NUM_SAMPLES; j++)
+				{
+					hist_lat[j] = fast_lat;
+					hist_lng[j] = fast_lng;
+				}
+				bInited = true;
 			}
-			bInited = true;
+			
+			last_tick = micros();
+			
+			Serial.printf("Latitude  : %lf\n", fast_lat);
+			Serial.printf( "Longitude : %lf\n", fast_lng);
+
+			hist_lat[idx] = fast_lat;
+			hist_lng[idx] = fast_lng;
+			
+			idx++;
+			if (idx == NUM_SAMPLES) idx = 0;
+			Serial.printf("idx = %d\n", idx);
+
+			slowLat = 0.0;
+			slowLng = 0.0;
+			
+			for (int i = 0; i < NUM_SAMPLES; i++)
+			{
+				slowLat += hist_lat[i];
+				slowLng += hist_lng[i];
+			}
+			
+			slowLat /= (float) NUM_SAMPLES;
+			slowLng /= (float) NUM_SAMPLES;
+			
+			
+			led_display1();
+	/*
+			Serial.print("Satellites: ");
+			Serial.println(gps.satellites.value());
+			Serial.print("Altitude  : ");
+			Serial.print(gps.altitude.feet() / 3.2808);
+			Serial.println("M");
+
+			Serial.print("Time      : ");
+			Serial.print(gps.time.hour());
+			Serial.print(":");
+			Serial.print(gps.time.minute());
+			Serial.print(":");
+			Serial.println(gps.time.second());
+
+
+			Serial.print("Speed     : ");
+			Serial.println(gps.speed.kmph()); 
+			Serial.println("**********************");
+	*/		
+			
+			smartDelay(1000);
+			uint32_t diff_time = micros() - last_tick;
+			Serial.printf("report = %d uS\n\n", diff_time);
+			
+			if (diff_time > 1200000 && gps.charsProcessed() < 10)
+			Serial.println(F("No GPS data received: check wiring"));
 		}
-		
-		last_tick = micros();
-		
-		Serial.printf("Latitude  : %lf\n", fast_lat);
-		Serial.printf( "Longitude : %lf\n", fast_lng);
 
-		hist_lat[idx] = fast_lat;
-		hist_lng[idx] = fast_lng;
-		
-		idx++;
-		if (idx == NUM_SAMPLES) idx = 0;
-		Serial.printf("idx = %d\n", idx);
-
-		slowLat = 0.0;
-		slowLng = 0.0;
-		
-		for (int i = 0; i < NUM_SAMPLES; i++)
-		{
-			slowLat += hist_lat[i];
-			slowLng += hist_lng[i];
-		}
-		
-		slowLat /= (float) NUM_SAMPLES;
-		slowLng /= (float) NUM_SAMPLES;
-		
-		
-		led_display1();
-/*
-		Serial.print("Satellites: ");
-		Serial.println(gps.satellites.value());
-		Serial.print("Altitude  : ");
-		Serial.print(gps.altitude.feet() / 3.2808);
-		Serial.println("M");
-
-		Serial.print("Time      : ");
-		Serial.print(gps.time.hour());
-		Serial.print(":");
-		Serial.print(gps.time.minute());
-		Serial.print(":");
-		Serial.println(gps.time.second());
-
-
-		Serial.print("Speed     : ");
-		Serial.println(gps.speed.kmph()); 
-		Serial.println("**********************");
-*/		
-		
+		display.display();
 		smartDelay(1000);
-		uint32_t diff_time = micros() - last_tick;
-		Serial.printf("report = %d uS\n\n", diff_time);
-		
-		if (diff_time > 1200000 && gps.charsProcessed() < 10)
-		Serial.println(F("No GPS data received: check wiring"));
+		esp_task_wdt_reset();
+				
 	}
 }
 
@@ -293,7 +318,7 @@ void setup()
 	{
 		    .timeout_ms = 5000,        // Timeout in milliseconds
 		    .idle_core_mask = 0,       // Do not watch idle tasks
-		    .trigger_panic = true      // Panic (restart) on timeout
+		    .trigger_panic = false     //true = restart ) on timeout
 	};
 
 	esp_task_wdt_reconfigure(&wdt_config); 
