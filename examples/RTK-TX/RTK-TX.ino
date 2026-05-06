@@ -20,6 +20,7 @@
 #include <Wire.h>
 #include "SSD1306.h"
 #include "SX127x_Tx.h"
+#include "ota.h"
 
 #define LINE Serial.printf("%s:%d <<< \n", __FUNCTION__, __LINE__);
 
@@ -141,8 +142,7 @@ int  xprintf(uint8_t lineNo, const char *format, ...)
 //---------------------------------------------------------
 void loop()
 {
-    while (1)
-        delay(-1);
+	_loop_ota();
 };                                 // keep arduino happy
 //---------------------------------------------------------
 void led_display1(void)
@@ -180,10 +180,23 @@ void led_display1(void)
 double hist_lat[NUM_SAMPLES];
 double hist_lng[NUM_SAMPLES];
 
+char rtlDiffMsg[60];
+
+int32_t double2bin(double input)
+{
+	uint32_t ret;
+	ret = input * 10000000.0;  // x.8 digits.
+	return ret;
+}
+
 void taskGPS(void *not_used)
 {
     static uint32_t last_tick;
     static bool bInited = false;
+
+	uint32_t num_satellites;
+	double percent;
+	uint32_t tick = 0;
 
     while (1)
     {
@@ -191,24 +204,21 @@ void taskGPS(void *not_used)
         fast_lat = gps.location.lat();
         fast_lng = gps.location.lng();
 
+		num_satellites = gps.satellites.value();
+		percent = gps.hdop.value()/10.;
+
         if (!fast_lat && !fast_lng)
         {
-            static uint32_t tick = 0;
-            uint16_t num_satellites = gps.satellites.value();
-            uint16_t quality = gps.hdop.value();
             display.clear();
 
             xprintf(0, "LA=%+9.7f", fast_lat);
             xprintf(1, "LN=%+9.7f", fast_lng);
 
-            xprintf(2, "SA=%02d Q=%d\n", num_satellites, min((uint16_t)999, quality));
-            xprintf(3, "t=%d\n", tick++);
-
-            printf("%8d SA=%d QUAL=%d\n", tick, num_satellites, quality);
-
+            xprintf(2, "t=%d\n", tick++);
         }
         else
         {
+        	// first valid sample pre-populates entire array
             if (!bInited && fast_lat)
             {
                 for (int j = 0; j < NUM_SAMPLES; j++)
@@ -233,7 +243,7 @@ void taskGPS(void *not_used)
             if (idx == NUM_SAMPLES)
                 idx = 0;
 
-            Serial.printf("idx = %d\n", idx);
+            //Serial.printf("idx = %d\n", idx);
 
             slowLat = 0.0;
             slowLng = 0.0;
@@ -247,6 +257,22 @@ void taskGPS(void *not_used)
             slowLat /= (float)NUM_SAMPLES;
             slowLng /= (float)NUM_SAMPLES;
 
+			int len;
+#if 1
+			len = snprintf(rtlDiffMsg, sizeof(rtlDiffMsg), 
+							   "%d 0x%f 0x%f %f %f", 
+							   idx, slowLat, slowLng, 
+							   slowLat-fast_lat, slowLng-fast_lng);
+				   
+			Serial.printf("%d %s\n", strlen(rtlDiffMsg), rtlDiffMsg);
+#endif
+
+		    len = snprintf(rtlDiffMsg, sizeof(rtlDiffMsg), 
+		    				   "%d 0x%X 0x%X %+d %+d", 
+		    				   idx, double2bin(slowLat), double2bin(slowLng), 
+		    				   double2bin(slowLat-fast_lat), double2bin(slowLng-fast_lng));
+		    				   
+		    Serial.printf("%d %s\n", strlen(rtlDiffMsg), rtlDiffMsg);
 
             led_display1();
             /*
@@ -270,12 +296,17 @@ void taskGPS(void *not_used)
              */
 
             smartDelay(1000);
+            
             uint32_t diff_time = micros() - last_tick;
-            Serial.printf("report = %d uS\n\n", diff_time);
 
             if (diff_time > 1200000 && gps.charsProcessed() < 10)
                 Serial.println(F("No GPS data received: check wiring"));
         }
+
+		xprintf(3, "SA=%02d Q=%.1f%%\n", num_satellites, min((double)999, percent));
+		printf("%8d SA=%d QUAL=%.1f%%\n", tick, num_satellites, percent);
+		
+		
 
         display.display();
         smartDelay(1000);
@@ -322,6 +353,9 @@ void setup()
     delay(50);
     digitalWrite(16, HIGH);     // while OLED is running, must set GPIO16 in high?
 
+	delay(3000);
+    _setup_ota();
+
     // gps power mgt
 
     Wire.begin(21, 22);
@@ -336,6 +370,8 @@ void setup()
     axp.setPowerOutPut(AXP192_DCDC2, AXP202_ON);
     axp.setPowerOutPut(AXP192_EXTEN, AXP202_ON);
     axp.setPowerOutPut(AXP192_DCDC1, AXP202_ON);
+
+    
     GPS.begin(9600, SERIAL_8N1, 34, 12);       //17-TX 18-RX
 
 
