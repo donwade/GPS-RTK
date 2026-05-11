@@ -205,9 +205,10 @@ void taskGPS(void *not_used)
         fast_lng = gps.location.lng();
 
 		num_satellites = gps.satellites.value();
-		percent = gps.hdop.value()/10.;
+		percent = 100. - min(100., gps.hdop.value()/10.);
+		//Serial.printf("yyyyyyyyyyyy %f\n", percent);
 
-        if (!fast_lat && !fast_lng)
+        if (!fast_lat || !fast_lng)
         {
             display.clear();
 
@@ -354,6 +355,7 @@ void setup()
     digitalWrite(16, HIGH);     // while OLED is running, must set GPIO16 in high?
 
 	delay(3000);
+	
     _setup_ota();
 
     // gps power mgt
@@ -361,16 +363,22 @@ void setup()
     Wire.begin(21, 22);
 
     if (!axp.begin(Wire, AXP192_SLAVE_ADDRESS))
+    {
+	    axp.setPowerOutPut(AXP192_LDO2, AXP202_ON);
+	    axp.setPowerOutPut(AXP192_LDO3, AXP202_ON);
+	    axp.setPowerOutPut(AXP192_DCDC2, AXP202_ON);
+	    axp.setPowerOutPut(AXP192_EXTEN, AXP202_ON);
+	    axp.setPowerOutPut(AXP192_DCDC1, AXP202_ON);
         Serial.println("AXP192 Begin PASS");
+	}
     else
-        Serial.println("AXP192 Begin FAIL");
-
-    axp.setPowerOutPut(AXP192_LDO2, AXP202_ON);
-    axp.setPowerOutPut(AXP192_LDO3, AXP202_ON);
-    axp.setPowerOutPut(AXP192_DCDC2, AXP202_ON);
-    axp.setPowerOutPut(AXP192_EXTEN, AXP202_ON);
-    axp.setPowerOutPut(AXP192_DCDC1, AXP202_ON);
-
+    {
+    	while(true)
+    	{
+	        Serial.println("AXP192 Begin FAIL");
+	        delay(1000);
+	    }
+	}
     
     GPS.begin(9600, SERIAL_8N1, 34, 12);       //17-TX 18-RX
 
